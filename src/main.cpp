@@ -33,6 +33,9 @@ bool runType(std::string args) {
   } else if (cmd == "exit") {
     std::cout << "exit is a shell builtin" << "\n";
     return false;
+  } else if (cmd == "type") {
+    std::cout << "type is a shell builtin" << "\n";
+    return false;
   } else {
     std::cerr << cmd << ": not found" << "\n";
     return false;
