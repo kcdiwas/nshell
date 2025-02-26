@@ -128,6 +128,10 @@ int main()
     {
       runType(args);
     }
+    else if (!checkPath(cmd).empty())
+    {
+      system(input.c_str());
+    }
     else
     {
       std::cerr << cmd << ": command not found" << "\n";
