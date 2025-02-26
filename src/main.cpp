@@ -1,6 +1,7 @@
 #include <iostream>
 #include <stdlib.h>
 #include <unistd.h>
+#include <filesystem>
 
 std::string printCmd(std::string input)
 {
@@ -83,6 +84,11 @@ bool runType(std::string args)
     std::cout << "type is a shell builtin" << "\n";
     return false;
   }
+  else if (cmd == "pwd")
+  {
+    std::cout << "pwd is a shell builtin" << "\n";
+    return false;
+  }
   else if (!checkPath(cmd).empty())
   {
     std::cout << cmd << " is " << checkPath(cmd) << "\n";
@@ -127,6 +133,10 @@ int main()
     else if (cmd == "type")
     {
       runType(args);
+    }
+    else if (cmd == "pwd")
+    {
+      std::cout << std::filesystem::current_path().string().substr(0, std::filesystem::current_path().string().size()) << "\n";
     }
     else if (!checkPath(cmd).empty())
     {
