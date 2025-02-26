@@ -1,151 +1,175 @@
 #include <iostream>
-#include <stdlib.h>
-#include <unistd.h>
+#include <string>
 #include <filesystem>
+#include <unistd.h>
+#include <memory>
 
-std::string printCmd(std::string input)
+class Shell
 {
-  int limiterIndex = input.find(" ");
-  int cutoffLength = limiterIndex;
-  if (limiterIndex == -1)
+private:
+  bool exit_requested = false;
+
+  struct Command
   {
-    cutoffLength = input.size();
-    limiterIndex = input.size();
-  }
-  else
+    std::string cmd;
+    std::string args;
+  };
+
+  Command parseCommand(const std::string &input) const
   {
-    limiterIndex++;
-  }
-
-  return input.substr(0, cutoffLength);
-}
-
-std::string printArgs(std::string input)
-{
-  int limiterIndex = input.find(" ");
-  if (limiterIndex == -1)
-  {
-    limiterIndex = input.size();
-  }
-  else
-  {
-    limiterIndex++;
-  }
-
-  return input.substr(limiterIndex, input.size());
-}
-
-std::string checkPath(std::string cmd)
-{
-  std::string path = getenv("PATH");
-
-  size_t start = 0;
-  size_t pos = path.find(":");
-
-  while (start < path.size())
-  {
-    std::string dir;
-    if (pos == std::string::npos)
+    size_t space_pos = input.find(' ');
+    if (space_pos == std::string::npos)
     {
-      dir = path.substr(start);
-      start = path.size();
+      return {input, ""};
     }
-    else
+    return {
+        input.substr(0, space_pos),
+        input.substr(space_pos + 1)};
+  }
+
+  std::string findInPath(const std::string &cmd) const
+  {
+    const char *path_env = getenv("PATH");
+    if (!path_env)
+      return "";
+
+    std::string path = path_env;
+    size_t start = 0;
+    size_t pos;
+
+    while ((pos = path.find(':', start)) != std::string::npos)
     {
-      dir = path.substr(start, pos - start);
-      start = pos + 1;
-      pos = path.find(":", start);
-    }
+      std::string dir = path.substr(start, pos - start);
+      std::string full_path = dir + "/" + cmd;
 
-    std::string fullPath = dir + "/" + cmd;
-    if (access(fullPath.c_str(), F_OK) == 0)
-    {
-      return fullPath;
-    }
-  }
-  return "";
-}
-
-bool runType(std::string args)
-{
-  std::string cmd = printCmd(args);
-  if (cmd == "echo")
-  {
-    std::cout << "echo is a shell builtin" << "\n";
-    return false;
-  }
-  else if (cmd == "exit")
-  {
-    std::cout << "exit is a shell builtin" << "\n";
-    return false;
-  }
-  else if (cmd == "type")
-  {
-    std::cout << "type is a shell builtin" << "\n";
-    return false;
-  }
-  else if (cmd == "pwd")
-  {
-    std::cout << "pwd is a shell builtin" << "\n";
-    return false;
-  }
-  else if (!checkPath(cmd).empty())
-  {
-    std::cout << cmd << " is " << checkPath(cmd) << "\n";
-    return false;
-  }
-  else
-  {
-    std::cerr << cmd << ": not found" << "\n";
-    return false;
-  }
-}
-
-int main()
-{
-  // Flush after every std::cout / std:cerr
-  std::cout << std::unitbuf;
-  std::cerr << std::unitbuf;
-
-  bool exit = false;
-
-  // Uncomment this block to pass the first stage
-  do
-  {
-    std::cout << "$ ";
-
-    std::string input;
-    std::getline(std::cin, input);
-
-    std::string cmd = printCmd(input);
-    std::string args = printArgs(input);
-    if (cmd == "exit")
-    {
-      if (args == "0")
+      if (access(full_path.c_str(), F_OK) == 0)
       {
-        exit = true;
+        return full_path;
       }
+      start = pos + 1;
     }
-    else if (cmd == "echo")
+
+    // Check last directory
+    std::string dir = path.substr(start);
+    std::string full_path = dir + "/" + cmd;
+    return (access(full_path.c_str(), F_OK) == 0) ? full_path : "";
+  }
+
+  void handleBuiltin(const std::string &cmd, const std::string &args)
+  {
+    if (cmd == "type")
     {
-      std::cout << args << "\n";
+      executeType(args);
     }
-    else if (cmd == "type")
+    else if (cmd == "cd")
     {
-      runType(args);
+      executeCD(args);
     }
     else if (cmd == "pwd")
     {
-      std::cout << std::filesystem::current_path().string().substr(0, std::filesystem::current_path().string().size()) << "\n";
+      executePWD();
     }
-    else if (!checkPath(cmd).empty())
+    else if (cmd == "echo")
     {
-      system(input.c_str());
+      std::cout << args << '\n';
+    }
+    else if (cmd == "exit" && args == "0")
+    {
+      exit_requested = true;
+    }
+  }
+
+  void executeType(const std::string &args)
+  {
+    Command cmd = parseCommand(args);
+    if (isBuiltin(cmd.cmd))
+    {
+      std::cout << cmd.cmd << " is a shell builtin\n";
     }
     else
     {
-      std::cerr << cmd << ": command not found" << "\n";
+      std::string path = findInPath(cmd.cmd);
+      if (!path.empty())
+      {
+        std::cout << cmd.cmd << " is " << path << '\n';
+      }
+      else
+      {
+        std::cerr << cmd.cmd << ": not found\n";
+      }
     }
+  }
 
-  } while (exit == false);
+  void executeCD(const std::string &args)
+  {
+    if (args.empty())
+    {
+      const char *home = getenv("HOME");
+      if (home)
+      {
+        chdir(home);
+      }
+    }
+    else if (chdir(args.c_str()) != 0)
+    {
+      std::cerr << "cd: " << args << ": No such file or directory\n";
+    }
+  }
+
+  void executePWD() const
+  {
+    std::cout << std::filesystem::current_path().string() << '\n';
+  }
+
+  bool isBuiltin(const std::string &cmd) const
+  {
+    static const std::string builtins[] = {
+        "echo", "cd", "pwd", "type", "exit"};
+
+    for (const auto &builtin : builtins)
+    {
+      if (cmd == builtin)
+        return true;
+    }
+    return false;
+  }
+
+public:
+  void run()
+  {
+    std::cout << std::unitbuf;
+    std::cerr << std::unitbuf;
+
+    while (!exit_requested)
+    {
+      std::cout << "$ ";
+      std::string input;
+      std::getline(std::cin, input);
+
+      if (input.empty())
+        continue;
+
+      Command cmd = parseCommand(input);
+
+      if (isBuiltin(cmd.cmd))
+      {
+        handleBuiltin(cmd.cmd, cmd.args);
+      }
+      else if (!findInPath(cmd.cmd).empty())
+      {
+        system(input.c_str());
+      }
+      else
+      {
+        std::cerr << cmd.cmd << ": command not found\n";
+      }
+    }
+  }
+};
+
+int main()
+{
+  Shell shell;
+  shell.run();
+  return 0;
 }
