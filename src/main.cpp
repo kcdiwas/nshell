@@ -29,6 +29,9 @@ int main() {
       if (args == "0") {
         exit = true;
       }
+    } else if (cmd == "echo") {
+      std::cout << args;
+      exit = true;
     } else {
         std::cerr << cmd << ": command not found" << "\n";
     }
