@@ -102,7 +102,7 @@ private:
 
   void executeCD(const std::string &args)
   {
-    if (args.empty())
+    if (args.empty() || args == "~")
     {
       const char *home = getenv("HOME");
       if (home)
