@@ -30,8 +30,7 @@ int main() {
         exit = true;
       }
     } else if (cmd == "echo") {
-      std::cout << args;
-      exit = true;
+      std::cout << args << "\n";
     } else {
         std::cerr << cmd << ": command not found" << "\n";
     }
