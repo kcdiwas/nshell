@@ -10,4 +10,6 @@ int main() {
 
   std::string input;
   std::getline(std::cin, input);
+
+  std::cerr << "invalid_command: command not found";
 }
