@@ -53,11 +53,11 @@ std::string checkPath(std::string cmd)
     {
       dir = path.substr(start, pos - start);
       start = pos + 1;
-      pos = path.find(":", pos);
+      pos = path.find(":", start);
     }
 
     std::string fullPath = dir + "/" + cmd;
-    if (access(fullPath.c_str(), X_OK) == 0)
+    if (access(fullPath.c_str(), F_OK) == 0)
     {
       return fullPath;
     }
