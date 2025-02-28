@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <unistd.h>
 #include <memory>
+#include <vector>
 
 class Shell
 {
@@ -12,7 +13,7 @@ private:
   struct Command
   {
     std::string cmd;
-    std::string args;
+    std::vector<std::string> args;
   };
 
   Command parseCommand(const std::string &input) const
@@ -20,11 +21,57 @@ private:
     size_t space_pos = input.find(' ');
     if (space_pos == std::string::npos)
     {
-      return {input, ""};
+      return {input, {""}};
     }
-    return {
-        input.substr(0, space_pos),
-        input.substr(space_pos + 1)};
+    std::string args = input.substr(space_pos + 1);
+    std::vector<std::string> args_vector;
+    parseQuotedArgs(args, args_vector);
+    return {input.substr(0, space_pos), args_vector};
+  }
+
+  void parseQuotedArgs(const std::string &args, std::vector<std::string> &args_vector) const
+  {
+
+    std::string new_args = args;
+    std::string space_str = "";
+    while (new_args[0] == ' ')
+    {
+      space_str += " ";
+      new_args = new_args.substr(1);
+    }
+    args_vector.push_back(space_str);
+    if (!new_args.empty() && (new_args[0] == '\'' || new_args[0] == '"'))
+    {
+      char quote = new_args[0];
+      size_t end_quote = new_args.find(quote, 1);
+      if (end_quote != std::string::npos)
+      {
+        args_vector.push_back(new_args.substr(1, end_quote - 1));
+        parseQuotedArgs(new_args.substr(end_quote + 1), args_vector);
+      }
+    }
+    else if (!new_args.empty())
+    {
+      bool isLastSpace = false;
+      std::string new_str;
+      for (char c : new_args)
+      {
+        if (c == ' ')
+        {
+          if (!isLastSpace)
+          {
+            new_str += c;
+          }
+          isLastSpace = true;
+        }
+        else
+        {
+          new_str += c;
+          isLastSpace = false;
+        }
+      }
+      args_vector.push_back(new_str);
+    }
   }
 
   std::string findInPath(const std::string &cmd) const
@@ -55,7 +102,7 @@ private:
     return (access(full_path.c_str(), F_OK) == 0) ? full_path : "";
   }
 
-  void handleBuiltin(const std::string &cmd, const std::string &args)
+  void handleBuiltin(const std::string &cmd, const std::vector<std::string> &args)
   {
     if (cmd == "type")
     {
@@ -71,38 +118,71 @@ private:
     }
     else if (cmd == "echo")
     {
-      std::cout << args << '\n';
+      for (const auto &arg : args)
+      {
+        std::cout << arg;
+      }
+      std::cout << '\n';
     }
-    else if (cmd == "exit" && args == "0")
+    else if (cmd == "exit")
     {
-      exit_requested = true;
+      std::string new_args;
+      for (const auto &arg : args)
+      {
+        if (!arg.empty() && arg.find_first_not_of(' ') != std::string::npos)
+        {
+          new_args = arg;
+          break;
+        }
+      }
+      if (new_args == "0")
+      {
+        exit_requested = true;
+      }
     }
   }
 
-  void executeType(const std::string &args)
+  void executeType(const std::vector<std::string> &args)
   {
-    Command cmd = parseCommand(args);
-    if (isBuiltin(cmd.cmd))
+    std::string new_args;
+    for (const auto &arg : args)
     {
-      std::cout << cmd.cmd << " is a shell builtin\n";
+      if (!arg.empty() && arg.find_first_not_of(' ') != std::string::npos)
+      {
+        new_args = arg;
+        break;
+      }
+    }
+    if (isBuiltin(new_args))
+    {
+      std::cout << new_args << " is a shell builtin\n";
     }
     else
     {
-      std::string path = findInPath(cmd.cmd);
+      std::string path = findInPath(new_args);
       if (!path.empty())
       {
-        std::cout << cmd.cmd << " is " << path << '\n';
+        std::cout << new_args << " is " << path << '\n';
       }
       else
       {
-        std::cerr << cmd.cmd << ": not found\n";
+        std::cerr << new_args << ": not found\n";
       }
     }
   }
 
-  void executeCD(const std::string &args)
+  void executeCD(const std::vector<std::string> &args)
   {
-    if (args.empty() || args == "~")
+    std::string new_args;
+    for (const auto &arg : args)
+    {
+      if (!arg.empty() && arg.find_first_not_of(' ') != std::string::npos)
+      {
+        new_args = arg;
+        break;
+      }
+    }
+    if (new_args.empty() || new_args == "~")
     {
       const char *home = getenv("HOME");
       if (home)
@@ -110,9 +190,9 @@ private:
         chdir(home);
       }
     }
-    else if (chdir(args.c_str()) != 0)
+    else if (chdir(new_args.c_str()) != 0)
     {
-      std::cerr << "cd: " << args << ": No such file or directory\n";
+      std::cerr << "cd: " << new_args << ": No such file or directory\n";
     }
   }
 
